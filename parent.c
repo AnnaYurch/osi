@@ -75,6 +75,6 @@ int main() {
         waitpid(pid, &status, 0); //Ожидание завершения дочернего процесса? А почему дочерний процесс не завершился раньше
         write(STDOUT_FILENO, "Parent process exiting.\n", 24);
     }
-
+ //
     return 0;
 }
