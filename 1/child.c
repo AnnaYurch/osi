@@ -17,10 +17,9 @@ bool is_prime(int num) {
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        _exit(1);  // можно ли написать что-то такое:
-                    //const char msg[] = "error: failed to open requested file\n";
-                    //write(STDERR_FILENO, msg, sizeof(msg));
-                    //exit(EXIT_FAILURE);
+        const char msg[] = "error: not enough arg\n";
+        write(STDERR_FILENO, msg, sizeof(msg));
+        exit(EXIT_FAILURE);
     }
 
     const char *filename = argv[1];
@@ -30,11 +29,13 @@ int main(int argc, char *argv[]) {
     // Открываем файл для записи составных чисел
     int file_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644); //O_WRONLY - открываем для записи,   
     if (file_fd < 0) {                                                 //O_CREAT - создаем, если нет,
-        _exit(1);                                                      //O_APPEND - добавляем в конец,
-    }                                                                  //0644 - права доступа на файл (r/w - владелец, r)
+        const char msg[] = "error with open requested file\n";
+        write(STDERR_FILENO, msg, sizeof(msg));
+        exit(EXIT_FAILURE);                                            //O_APPEND - добавляем в конец,
+    }                                                   //0644 - права доступа на файл (r/w - владелец, r)
 
     int number;
-    while (1) { //что такое файловый дискриптор? и этот цикл считывает только одно число?
+    while (1) {
         if (read(pipe1, &number, sizeof(number)) <= 0) break;
         
         if (number < 0) {
@@ -55,5 +56,5 @@ int main(int argc, char *argv[]) {
     }
 
     close(file_fd);
-    _exit(0);
+    exit(0);
 }
