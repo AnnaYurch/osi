@@ -1,13 +1,164 @@
-4
-4
-6
-8
-10
-10
-6
-4
-4
-6
-8
-8
-9
+*******************************************************************************************************
+parent.c
+
+#include <unistd.h> //fork, pipe, dup2, execve
+#include <fcntl.h> //open
+#include <sys/types.h> //*waitpid
+#include <sys/wait.h>
+#include <stdlib.h> //exit, atoi
+
+//execve - заменяет текущий процесс на новый, если нет ошибок, то не вернет ничего
+//подаем: путь до исполняемого файла, аргументы, переменные окружения, если null, то..
+//доч унаследует переменные родителя
+//fork - создает новый дочерний процесс, для запуска child
+//pipe - сосдает канал для межпроцессорного ваимодействия, через который происходит обмен данными
+//pipe(pipe1) создает массив из 2 файловых дескрипторов
+//dup2 - перенаправляет файловые дискрипторы. Мы перенаправляем ввод и вывод дочернего процесса,
+//чтоб он читал данные из pipe1 и писал в pipe2
+//waitpid - чтоб родительский процесс не завершился до завершения дочернего
+//
+
+
+//pid_t - тип данных для представления идентификаторов процессов
+//файловый дискриптор - целочисленное значение для управления открытыми файлами и другими потоками
+//0 - стандартный ввод, 1 - стандартный вывод
+//Дочерний процесс - получает копию всех данных родительского и выполняет отдельные задачи параллельнос ним
+//нам он нужен для выполнения программы child
+int main() {
+    char filename[256];
+    write(STDOUT_FILENO, "Enter the filename to store composite numbers: ", 47);
+    int len = read(STDIN_FILENO, filename, sizeof(filename));
+    if (len <= 1) {
+        const char msg[] = "error: invalid filename\n";
+        write(STDERR_FILENO, msg, sizeof(msg));
+        exit(EXIT_FAILURE);
+    }
+
+    filename[len - 1] = '\0';
+
+    int pipe1[2], pipe2[2]; //wr
+    if (pipe(pipe1) == -1 || pipe(pipe2) == -1) {
+        const char msg[] = "error with create pipes\n";
+        write(STDERR_FILENO, msg, sizeof(msg));
+        exit(EXIT_FAILURE);
+    }
+
+    pid_t pid = fork();
+    if (pid == -1) {
+        const char msg[] = "error: fork failed\n";
+        write(STDERR_FILENO, msg, sizeof(msg));
+        exit(EXIT_FAILURE); 
+    }
+
+    if (pid == 0) {
+        close(pipe1[1]); //для r
+        close(pipe2[0]); //для w
+
+        dup2(pipe1[0], STDIN_FILENO); // Перенаправляем pipe1 на стандартный ввод
+        dup2(pipe2[1], STDOUT_FILENO);
+
+        char *args[] = {"./child", filename, NULL};
+        execve("./child", args, NULL);
+
+        _exit(1);
+    } else {
+        // Родительский процесс
+        close(pipe1[0]); //родительский отправляет числа
+        close(pipe2[1]); //дочерний отправляет через это число в родительский
+
+        int number;
+        char buffer[256];
+        while (1) {
+            write(STDOUT_FILENO, "Enter a number (negative to exit): ", 35);
+            int len = read(STDIN_FILENO, buffer, sizeof(buffer));
+            if (len <= 1) break;
+
+            buffer[len - 1] = '\0';
+            number = atoi(buffer);
+
+            // Отправляем число дочернему процессу
+            write(pipe1[1], &number, sizeof(number)); //куда что и сколько, пишем число в канал pipe, 
+                                                    //чтоб передать его дочернему процессу 
+
+            // Ожидаем ответ от дочернего процесса
+            int child_response;
+            if (read(pipe2[0], &child_response, sizeof(child_response)) > 0) { //считывает данные из pipe2
+                if (child_response < 0) {
+                    write(STDOUT_FILENO, "Child indicated to terminate\n", 29);
+                    break;
+                }
+            }
+            if (number < 0) break;
+        }
+
+        close(pipe1[1]);
+        close(pipe2[0]);
+
+        int status;
+        waitpid(pid, &status, 0);
+        write(STDOUT_FILENO, "Parent process exiting.\n", 24);
+    }
+ 
+    return 0;
+}
+
+*********************************************************************************************
+child.c
+
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdio.h>
+
+bool is_prime(int num) {
+    if (num <= 1) return false;
+    for (int i = 2; i * i <= num; i++) {
+        if (num % i == 0) return false;
+    }
+    return true;
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        const char msg[] = "error: not enough arg\n";
+        write(STDERR_FILENO, msg, sizeof(msg));
+        exit(EXIT_FAILURE);
+    }
+
+    const char *filename = argv[1];
+    int pipe1 = STDIN_FILENO;   // Константа (0) указывает на stdin 
+    int pipe2 = STDOUT_FILENO;
+
+    // Открываем файл для записи составных чисел
+    int file_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);  //O_WRONLY - открываем для записи,   
+    if (file_fd < 0) {                                                  //O_CREAT - создаем, если нет,
+        const char msg[] = "error with open requested file\n";          //O_APPEND - добавляем в конец,
+        write(STDERR_FILENO, msg, sizeof(msg));            //0644 - права доступа на файл (r/w - владелец, r)
+        exit(EXIT_FAILURE);                                            
+    }                                               
+
+    int number;
+    while (1) {
+        if (read(pipe1, &number, sizeof(number)) <= 0) break;
+        
+        if (number < 0) {
+            write(pipe2, &number, sizeof(number));
+            break;
+        }
+
+        if (is_prime(number) || number == 1 || number == 0) {
+            write(pipe2, &number, sizeof(number));
+        } else {
+            char buffer[20];
+            int len = snprintf(buffer, sizeof(buffer), "%d\n", number);
+            //переделывает num в строку и записывает в buf
+
+            write(file_fd, buffer, len); //записывает len байт из buf
+            write(pipe2, &number, sizeof(number));
+        }
+    }
+
+    close(file_fd);
+    exit(0);
+}

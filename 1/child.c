@@ -23,7 +23,6 @@ int main(int argc, char *argv[]) {
     int pipe1 = STDIN_FILENO;   // Константа (0) указывает на stdin 
     int pipe2 = STDOUT_FILENO;
 
-    // Открываем файл для записи составных чисел
     int file_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);  //O_WRONLY - открываем для записи,   
     if (file_fd < 0) {                                                  //O_CREAT - создаем, если нет,
         const char msg[] = "error with open requested file\n";          //O_APPEND - добавляем в конец,
@@ -47,7 +46,7 @@ int main(int argc, char *argv[]) {
             int len = snprintf(buffer, sizeof(buffer), "%d\n", number);
             //переделывает num в строку и записывает в buf
 
-            write(file_fd, buffer, len); //записывает len байт из buf
+            write(file_fd, buffer, len);
             write(pipe2, &number, sizeof(number));
         }
     }
