@@ -3,9 +3,11 @@
 #include <sys/types.h> //*waitpid
 #include <sys/wait.h>
 #include <stdlib.h> //exit, atoi
-#include <errno.h> //*
+
 //зачем нам тут использовать fork, pipe, dup2, waitpid я нисего в этом не понимаю обясни подробнее?
 //execve - заменяет текущий процесс на новый, если нет ошибок, то не вернет ничего
+//подаем: путь до исполняемого файла, аргументы, переменные окружения, если null, то..
+//доч унаследует переменные родителя
 //fork - создает новый дочерний процесс, для запуска child
 //pipe - сосдает канал для межпроцессорного ваимодействия, через который происходит обмен данными
 //pipe(pipe1) создает массив из 2 файловых дескрипторов
@@ -24,7 +26,7 @@ int main() {
     char filename[256];
     write(STDOUT_FILENO, "Enter the filename to store composite numbers: ", 47);
     int len = read(STDIN_FILENO, filename, sizeof(filename));
-    if (len <= 0) { //когда эта ошибка всплывет?
+    if (len <= 1) {
         const char msg[] = "error: invalid filename\n";
         write(STDERR_FILENO, msg, sizeof(msg));
         exit(EXIT_FAILURE);
@@ -39,23 +41,22 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    pid_t pid = fork(); //а зачем нам копия родительского процесса?
+    pid_t pid = fork();
     if (pid == -1) {
         const char msg[] = "error: fork failed\n";
         write(STDERR_FILENO, msg, sizeof(msg));
         exit(EXIT_FAILURE); 
     }
 
-    if (pid == 0) { //тоесть у нас работает и if и else одновременно?
-        //Дочерний процесс какие данные от родительского получает?
+    if (pid == 0) {
         close(pipe1[1]); //для r
         close(pipe2[0]); //для w
 
-        dup2(pipe1[0], STDIN_FILENO);  // Перенаправляем pipe1 на стандартный ввод
+        dup2(pipe1[0], STDIN_FILENO); // Перенаправляем pipe1 на стандартный ввод
         dup2(pipe2[1], STDOUT_FILENO);
 
-        char *args[] = {"./child", filename, NULL}; //зачем передавать эти аргументы, мы же 2 раза передаем ./child?
-        execve("./child", args, NULL); //что такое переменные окружения и зачем они?
+        char *args[] = {"./child", filename, NULL};
+        execve("./child", args, NULL);
 
         _exit(1);
     } else {
@@ -67,20 +68,20 @@ int main() {
         char buffer[256];
         while (1) {
             write(STDOUT_FILENO, "Enter a number (negative to exit): ", 35);
-            int len = read(STDIN_FILENO, buffer, sizeof(buffer)); //тут считываем, что пишет пользователь?
-            if (len <= 0) break;  // Почему именно break? в каком случае он сработает?
+            int len = read(STDIN_FILENO, buffer, sizeof(buffer));
+            if (len <= 1) break;
 
             buffer[len - 1] = '\0';
             number = atoi(buffer);
 
             // Отправляем число дочернему процессу
-            write(pipe1[1], &number, sizeof(number)); //куда что и сколько, пишем число в в канал pipe, 
+            write(pipe1[1], &number, sizeof(number)); //куда что и сколько, пишем число в канал pipe, 
                                                     //чтоб передать его дочернему процессу 
 
             // Ожидаем ответ от дочернего процесса
             int child_response;
             if (read(pipe2[0], &child_response, sizeof(child_response)) > 0) { //считывает данные из pipe2
-                if (child_response < 0) { //что такое child_response и что оно содержит?
+                if (child_response < 0) {
                     write(STDOUT_FILENO, "Child indicated to terminate\n", 29);
                     break;
                 }

@@ -1,10 +1,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <sys/types.h> //
-#include <sys/stat.h> //
 #include <stdbool.h>
-#include <errno.h> //
 #include <stdio.h>
 
 bool is_prime(int num) {
@@ -27,12 +24,12 @@ int main(int argc, char *argv[]) {
     int pipe2 = STDOUT_FILENO;
 
     // Открываем файл для записи составных чисел
-    int file_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644); //O_WRONLY - открываем для записи,   
-    if (file_fd < 0) {                                                 //O_CREAT - создаем, если нет,
-        const char msg[] = "error with open requested file\n";
-        write(STDERR_FILENO, msg, sizeof(msg));
-        exit(EXIT_FAILURE);                                            //O_APPEND - добавляем в конец,
-    }                                                   //0644 - права доступа на файл (r/w - владелец, r)
+    int file_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);  //O_WRONLY - открываем для записи,   
+    if (file_fd < 0) {                                                  //O_CREAT - создаем, если нет,
+        const char msg[] = "error with open requested file\n";          //O_APPEND - добавляем в конец,
+        write(STDERR_FILENO, msg, sizeof(msg));            //0644 - права доступа на файл (r/w - владелец, r)
+        exit(EXIT_FAILURE);                                            
+    }                                               
 
     int number;
     while (1) {
@@ -47,10 +44,10 @@ int main(int argc, char *argv[]) {
             write(pipe2, &number, sizeof(number));
         } else {
             char buffer[20];
-            int len = snprintf(buffer, sizeof(buffer), "%d\n", number); //переделывает num в строку и записывает в buf
+            int len = snprintf(buffer, sizeof(buffer), "%d\n", number);
+            //переделывает num в строку и записывает в buf
 
             write(file_fd, buffer, len); //записывает len байт из buf
-
             write(pipe2, &number, sizeof(number));
         }
     }
