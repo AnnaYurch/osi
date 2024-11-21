@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
     }
 
     const char *filename = argv[1];
-    int pipe1 = STDIN_FILENO;   // Константа (0) указывает на stdin 
+    int pipe1 = STDIN_FILENO;
     int pipe2 = STDOUT_FILENO;
 
     int file_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);  //O_WRONLY - открываем для записи,   
@@ -44,7 +44,6 @@ int main(int argc, char *argv[]) {
         } else {
             char buffer[20];
             int len = snprintf(buffer, sizeof(buffer), "%d\n", number);
-            //переделывает num в строку и записывает в buf
 
             write(file_fd, buffer, len);
             write(pipe2, &number, sizeof(number));

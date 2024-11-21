@@ -42,8 +42,8 @@ int main() {
 
         _exit(1);
     } else {
-        close(pipe1[0]); //родительский отправляет числа
-        close(pipe2[1]); //дочерний отправляет через это число в родительский
+        close(pipe1[0]);
+        close(pipe2[1]);
 
         int number;
         char buffer[256];
@@ -55,12 +55,12 @@ int main() {
             buffer[len - 1] = '\0';
             number = atoi(buffer);
 
-            // Отправляем число дочернему процессу
+
             write(pipe1[1], &number, sizeof(number));
 
-            // Ожидаем ответ от дочернего процесса
+
             int child_response;
-            if (read(pipe2[0], &child_response, sizeof(child_response)) > 0) { //считывает данные из pipe2
+            if (read(pipe2[0], &child_response, sizeof(child_response)) > 0) {
                 if (child_response < 0) {
                     write(STDOUT_FILENO, "Child indicated to terminate\n", 29);
                     break;
