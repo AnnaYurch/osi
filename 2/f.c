@@ -53,6 +53,13 @@
 //
 //
 //
+//Расчет ускорения: Ускорение (Speedup) можно рассчитать как отношение времени выполнения программы с 
+//одним потоком к времени выполнения программы с n потоками.
+//
+//Расчет эффективности: Эффективность (Efficiency) можно рассчитать как отношение ускорения 
+//к количеству потоков.
+//
+//
 //
 //
 //
@@ -78,22 +85,10 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <time.h>
-
 #include <string.h>
-
 #include <unistd.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 
-
-#define MAX_THREADS 8
-
-typedef enum Errors {
-    INVALID_MEMORY,
-    INVALID_ARG,
-    OK
-} Errors;
+#define MAX_THREADS 4
 
 typedef struct {
     int num_points;

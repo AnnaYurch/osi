@@ -5,7 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#define MAX_THREADS 4
+#define MAX_THREADS 30
 
 typedef struct {
     int num_points;
@@ -37,7 +37,7 @@ void* monte_carlo(void* arg) {
     pthread_mutex_unlock(data->mutex);
 
     data->inside_circle = inside; // Сохраняем количество точек внутри окружности для данного потока
-    return NULL; //стандартный способ завершить поток, который не возвращает никакого значения
+    return NULL;
 }
 
 int main(int argc, char* argv[]) {
@@ -71,6 +71,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    clock_t start_time = clock();
+
     // Создание потоков
     for (int i = 0; i < num_threads; i++) {
         thread_data[i].num_points = points_per_thread;
@@ -86,10 +88,11 @@ int main(int argc, char* argv[]) {
         pthread_join(threads[i], NULL); //блокирует выполнение до тех пор, пока указанный поток не завершится
     }
 
+    clock_t end_time = clock();
+
     pthread_mutex_destroy(&mutex);
 
     double estimated_pi = (4.0 * total_inside_circle) / num_points;
-    //Оценка числа π на основе количества точек внутри круга и общее количество точек
     double area = estimated_pi * radius * radius; // Площадь круга
     
     char* result = (char*)malloc(50 * sizeof(char));
@@ -107,5 +110,9 @@ int main(int argc, char* argv[]) {
     }
     write(STDOUT_FILENO, result, strlen(result));
     free(result);
+
+    double time_taken = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
+    printf("Time taken with %d threads: %f seconds\n", num_threads, time_taken);
+
     return 0;
 }
