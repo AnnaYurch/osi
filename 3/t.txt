@@ -1,0 +1,176 @@
+/////////////////////////////////////////////////////////////////////
+parent.c
+
+
+
+
+
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <semaphore.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+
+#define SHM_NAME "/my_shm"
+#define SEM_NAME "/my_sem"
+#define BUFFER_SIZE 256
+
+int main() {
+    char filename[256];
+    write(STDOUT_FILENO, "Enter the filename to store composite numbers: ", 47);
+    int len = read(STDIN_FILENO, filename, sizeof(filename));
+    if (len <= 1) {
+        const char msg[] = "error: invalid filename\n";
+        write(STDERR_FILENO, msg, sizeof(msg));
+        exit(EXIT_FAILURE);
+    }
+
+    filename[len - 1] = '\0';
+
+    // Создание общей памяти
+    int shm_fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
+    ftruncate(shm_fd, BUFFER_SIZE);
+    int *shared_memory = mmap(0, BUFFER_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+
+    // Создание семафора
+    sem_t *sem = sem_open(SEM_NAME, O_CREAT, 0644, 1);
+
+    pid_t pid = fork();
+    if (pid == -1) {
+        const char msg[] = "error: fork failed\n";
+        write(STDERR_FILENO, msg, sizeof(msg));
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid == 0) {
+        // Запускаем дочерний процесс
+        char *args[] = {"./child", filename, NULL};
+        execve("./child", args, NULL);
+        _exit(1);
+    } else {
+        int number;
+        char buffer[256];
+        while (1) {
+            write(STDOUT_FILENO, "Enter a number (negative to exit): ", 35);
+            int len = read(STDIN_FILENO, buffer, sizeof(buffer));
+            if (len <= 1) break;
+
+            buffer[len - 1] = '\0';
+            number = atoi(buffer);
+
+            sem_wait(sem); // Захватить семафор
+            shared_memory[0] = number; // Запись числа в общую память
+            sem_post(sem); // Освободить семафор
+
+            if (number < 0) break;
+
+            // Ожидание ответа от дочернего процесса
+            sem_wait(sem); // Захватить семафор
+            int child_response = shared_memory[0]; // Чтение числа из общей памяти
+            sem_post(sem); // Освободить семафор
+
+            if (child_response < 0) {
+                write(STDOUT_FILENO, "Child indicated to terminate\n", 29);
+                break;
+            }
+        }
+
+        // Завершение
+        sem_wait(sem); // Захватить семафор
+        shared_memory[0] = -1; // Отправка сигнала завершения дочернему процессу
+        sem_post(sem); // Освободить семафор
+
+        munmap(shared_memory, BUFFER_SIZE);
+        shm_unlink(SHM_NAME);
+        sem_close(sem);
+        sem_unlink(SEM_NAME);
+        int status;
+        waitpid(pid, &status, 0);
+        write(STDOUT_FILENO, "Parent process exiting.\n", 24);
+    }
+
+    return 0;
+}
+
+
+
+
+/////////////////////////////////////////////////////////////////////
+child.c 
+
+
+
+
+
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <semaphore.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <sys/types.h>
+
+#define SHM_NAME "/my_shm"
+#define SEM_NAME "/my_sem"
+#define BUFFER_SIZE 256
+
+bool is_prime(int num) {
+    if (num <= 1) return false;
+    for (int i = 2; i * i <= num; i++) {
+        if (num % i == 0) return false;
+    }
+    return true;
+}
+
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        const char msg[] = "error: not enough arg\n";
+        write(STDERR_FILENO, msg, sizeof(msg));
+        exit(EXIT_FAILURE);
+    }
+
+    const char *filename = argv[1];
+
+    // Создание общей памяти
+    int shm_fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
+    ftruncate(shm_fd, BUFFER_SIZE);
+    int *shared_memory = mmap(0, BUFFER_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+
+    // Создание семафора
+    sem_t *sem = sem_open(SEM_NAME, O_CREAT, 0644, 1);
+
+    int number;
+    while (1) {
+        sem_wait(sem); // Захватить семафор
+
+        number = shared_memory[0]; // Чтение числа из общей памяти
+        if (number < 0) {
+            sem_post(sem); // Освободить семафор
+            break;
+        }
+
+        if (is_prime(number) || number == 1 || number == 0) {
+            shared_memory[0] = number; // Запись числа обратно в общую память
+        } else {
+            char buffer[20];
+            int len = snprintf(buffer, sizeof(buffer), "%d\n", number);
+            int file_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
+            write(file_fd, buffer, len);
+            close(file_fd);
+            shared_memory[0] = number; // Запись числа обратно в общую память
+        }
+
+        sem_post(sem); // Освободить семафор
+    }
+
+    munmap(shared_memory, BUFFER_SIZE);
+    shm_unlink(SHM_NAME);
+    sem_close(sem);
+    sem_unlink(SEM_NAME);
+    exit(0);
+}
