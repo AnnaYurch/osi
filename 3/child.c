@@ -1,17 +1,14 @@
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdlib.h>
-#include <stdbool.h>
 #include <stdio.h>
-#include <semaphore.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <sys/mman.h>
-#include <sys/stat.h>
-#include <string.h>
-#include <sys/types.h>
+#include <stdbool.h>
+#include <semaphore.h>
 
-#define SHM_NAME "/my_shm"
-#define SEM_NAME "/my_sem"
-#define BUFFER_SIZE 256
+#define SHM_NAME "/my_shm" 
+#define SEM_WRITE_NAME "/sem_write"
+#define SEM_READ_NAME "/sem_read"
 
 bool is_prime(int num) {
     if (num <= 1) return false;
@@ -30,39 +27,44 @@ int main(int argc, char *argv[]) {
 
     const char *filename = argv[1];
 
-    int shm_fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
-    ftruncate(shm_fd, BUFFER_SIZE);
-    int *shared_memory = mmap(0, BUFFER_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    int shm_fd = shm_open(SHM_NAME, O_RDONLY, 0666);
 
-    sem_t *sem = sem_open(SEM_NAME, O_CREAT, 0644, 1);
+    int *shared_memory = mmap(0, sizeof(int) * 256, PROT_READ, MAP_SHARED, shm_fd, 0);
+
+    sem_t *sem_write = sem_open(SEM_WRITE_NAME, 0);
+    sem_t *sem_read = sem_open(SEM_READ_NAME, 0);
+
+    int file_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644); 
+    if (file_fd < 0) {                                                 
+        const char msg[] = "error with open requested file\n";         
+        write(STDERR_FILENO, msg, sizeof(msg));                   
+        exit(EXIT_FAILURE);
+    }
 
     int number;
     while (1) {
-        sem_wait(sem); 
-
+        sem_wait(sem_read); 
         number = shared_memory[0]; 
+
         if (number < 0) {
-            sem_post(sem);
+            write(STDOUT_FILENO, "Child indicated to terminate\n", 29);
             break;
         }
 
-        if (is_prime(number) || number == 1 || number == 0) {
-            shared_memory[0] = number; 
-        } else {
+        if (!(is_prime(number) || number == 1 || number == 0)) {
             char buffer[20];
             int len = snprintf(buffer, sizeof(buffer), "%d\n", number);
-            int file_fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
             write(file_fd, buffer, len);
-            close(file_fd);
-            shared_memory[0] = number; 
         }
 
-        sem_post(sem); 
+        sem_post(sem_write);
     }
 
-    munmap(shared_memory, BUFFER_SIZE);
-    shm_unlink(SHM_NAME);
-    sem_close(sem);
-    sem_unlink(SEM_NAME);
-    exit(0);
+    close(file_fd); 
+    munmap(shared_memory, sizeof(int) * 256); 
+    shm_unlink(SHM_NAME); 
+    sem_close(sem_write); 
+    sem_close(sem_read); 
+    
+    return 0;
 }
