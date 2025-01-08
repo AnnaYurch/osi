@@ -3,15 +3,15 @@
 #define MIN_BLOCK_SIZE 32
 
 typedef struct Block {
-    size_t size;
-    struct Block *next; 
+    size_t size; //размер блока
+    struct Block *next; //указатель на следующий блок
     bool is_free; 
 } Block;
 
 typedef struct Allocator {
-    Block *free_list_start_from; 
-    void *memory_start_from; 
-    size_t general_size;
+    Block *free_list_start_from; //указатель на начало списка свободных блоков
+    void *memory_start_from; //указатель на начало выделенной памяти
+    size_t general_size; //общий размер выделенной памяти
 } Allocator;
 
 Allocator *allocator_create(void *memory, size_t size) {
@@ -48,7 +48,10 @@ void *allocator_alloc(Allocator *allocator, size_t size) {
 
     while (current) {
         if (current->is_free && current->size >= size) {
+            // Если оставшийся размер блока достаточно для нового блока
             if (current->size >= size + sizeof(Block) + MIN_BLOCK_SIZE) {
+                //Создание нового указателя new_block, который указывает на начало нового свободного блока, 
+                //который будет создан после выделенного блока. 
                 Block *new_block = (Block *)((char *)current + sizeof(Block) + size);
                 new_block->size = current->size - size - sizeof(Block);
                 new_block->is_free = true;
@@ -87,6 +90,7 @@ void allocator_free(Allocator *allocator, void *ptr_to_memory) {
     Block *block_to_free = (Block *)((char *)ptr_to_memory - sizeof(Block));
     block_to_free->is_free = true;
 
+    // Объединение с соседними свободными блоками
     Block *current = allocator->free_list_start_from;
 
     if (block_to_free < current) {
@@ -101,14 +105,26 @@ void allocator_free(Allocator *allocator, void *ptr_to_memory) {
         current->next = block_to_free;
     }
 
+    // Объединение с предыдущим блоком
     if (current && current->is_free) {
         current->size += block_to_free->size + sizeof(Block);
         current->next = block_to_free->next;
         block_to_free = current;
     }
+    //Проверяем, свободен ли предыдущий блок (т.е. current):
+    //Если да, то объединяем его с освобождаемым блоком, увеличивая размер предыдущего блока на размер 
+    //освобождаемого блока и размер заголовка.
+    //Обновляем указатель next предыдущего блока, чтобы он указывал на следующий блок после освобождаемого.
+    //Обновляем block_to_free, чтобы он указывал на объединенный блок.
 
+
+    // Объединение с следующим блоком
     if (block_to_free->next && block_to_free->next->is_free) {
         block_to_free->size += block_to_free->next->size + sizeof(Block);
         block_to_free->next = block_to_free->next->next;
     }
+    //Проверяем, свободен ли следующий блок (т.е. block_to_free->next):
+    //Если да, то объединяем текущий блок с следующим, увеличивая его размер на размер следующего блока и 
+    //размер заголовка.
+    //Обновляем указатель next текущего блока, чтобы он указывал на следующий блок после следующего.
 }
