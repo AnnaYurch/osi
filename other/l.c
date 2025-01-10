@@ -85,7 +85,7 @@ void *allocator_alloc(Allocator *allocator, size_t size) {
 
                 best->next = new_block;
                 best->size = size;
-            }
+        }
 
         best->is_free = false;
 
